@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">AI Spend</string>
+    <string name="widget_label">AI Spend</string>
+    <string name="widget_description">Usage limits, spend and balances for all your AI accounts.</string>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gauge arc with three bars: usage meter + spend. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M34,66 A22,22 0 1 1 74,66"
+        android:strokeColor="#7CC4FF"
+        android:strokeLineCap="round"
+        android:strokeWidth="5" />
+    <path android:fillColor="#FFFFFF" android:pathData="M42,58h5v12h-5z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M51.5,50h5v20h-5z" />
+    <path android:fillColor="#FFB86B" android:pathData="M61,44h5v26h-5z" />
+</vector>
