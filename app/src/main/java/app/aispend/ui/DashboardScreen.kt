@@ -108,10 +108,10 @@ private fun totals(snapshots: Collection<Snapshot>): List<Pair<String, String>>?
     val money = snapshots.flatMap { it.money }
     fun sum(pick: (Money) -> Boolean) = money.filter(pick).groupBy { it.currency }
         .map { (currency, list) -> Format.money(list.sumOf { it.amount }, currency) }
-        .joinToString(" + ")
+        .joinToString("\n")
     val rows = listOf(
-        "Spend this month" to sum { !it.isBalance && it.label == "This month" },
-        "Spend today" to sum { !it.isBalance && it.label == "Today" },
+        "This month" to sum { !it.isBalance && it.label == "This month" },
+        "Today" to sum { !it.isBalance && it.label == "Today" },
         "Balances" to sum { it.isBalance && it.currency != "credits" },
     ).filter { it.second.isNotEmpty() }
     return rows.ifEmpty { null }
@@ -120,11 +120,11 @@ private fun totals(snapshots: Collection<Snapshot>): List<Pair<String, String>>?
 @Composable
 private fun TotalsCard(rows: List<Pair<String, String>>) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             rows.forEach { (label, value) ->
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(label, style = MaterialTheme.typography.labelMedium)
-                    Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

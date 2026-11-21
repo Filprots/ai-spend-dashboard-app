@@ -1,5 +1,7 @@
 package app.aispend.ui
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.aispend.data.Store
 import app.aispend.sync.RefreshWorker
+import app.aispend.widget.SpendWidgetReceiver
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,9 +88,16 @@ fun SettingsScreen(store: Store, onBack: () -> Unit, onEdit: (String?) -> Unit) 
 
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             SectionTitle("Widget")
+            val widgets = AppWidgetManager.getInstance(context)
+            if (widgets.isRequestPinAppWidgetSupported) {
+                OutlinedButton(
+                    onClick = { widgets.requestPinAppWidget(ComponentName(context, SpendWidgetReceiver::class.java), null, null) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                ) { Text("Add widget to home screen") }
+            }
             Text(
-                "Long-press an empty spot on the home screen, choose Widgets, then AI Spend. It is resizable and scrolls when you have more profiles than fit.",
-                style = MaterialTheme.typography.bodyMedium,
+                "You can also long-press an empty spot on the home screen, choose Widgets, then AI Spend. It is resizable and scrolls when you have more profiles than fit.",
+                style = MaterialTheme.typography.bodySmall,
                 color = muted,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp),
             )
