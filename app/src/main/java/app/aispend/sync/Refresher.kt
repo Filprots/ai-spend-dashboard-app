@@ -21,7 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 
 object Refresher {
-    private val http: Http = OkHttpTransport()
+    val http: Http = OkHttpTransport()
     private val mutex = Mutex()
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running

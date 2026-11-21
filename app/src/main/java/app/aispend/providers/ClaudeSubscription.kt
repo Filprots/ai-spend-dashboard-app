@@ -10,8 +10,8 @@ import java.net.URLEncoder
  */
 object ClaudeSubscription : UsageProvider {
     private const val USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
-    private const val TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
-    private const val CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+    internal const val TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
+    internal const val CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
     override suspend fun fetch(credentials: Map<String, String>, http: Http): FetchResult {
         val token = credentials["token"].orEmpty()

@@ -134,3 +134,66 @@ class ProvidersTest {
         assertEquals("now", Format.countdown(0, 5))
     }
 }
+
+class SignInTest {
+    private class Scripted(val respond: (url: String, body: String) -> String) : Http {
+        val posts = mutableListOf<Pair<String, String>>()
+        override suspend fun get(url: String, headers: Map<String, String>): String = error("unexpected GET")
+        override suspend fun post(url: String, body: String, contentType: String, headers: Map<String, String>): String {
+            posts += url to body
+            return respond(url, body)
+        }
+    }
+
+    @Test
+    fun pkceMatchesRfc7636Example() {
+        assertEquals(
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+            app.aispend.providers.pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+        )
+    }
+
+    @Test
+    fun claudeSignInExchangesPastedCode() {
+        val pending = app.aispend.providers.ClaudeSignIn.start()
+        assertTrue(pending.url.contains("code_challenge=" + app.aispend.providers.pkceChallenge(pending.verifier)))
+        assertTrue(pending.url.contains("state=" + pending.state))
+        val http = Scripted { _, _ -> """{"access_token":"a1","refresh_token":"r1","expires_in":28800}""" }
+        val creds = runBlocking {
+            app.aispend.providers.ClaudeSignIn.finish(http, " thecode#${pending.state} ", pending.verifier, pending.state)
+        }
+        assertEquals(mapOf("token" to "a1", "refresh" to "r1"), creds)
+        assertTrue(http.posts.single().second.contains("\"code\":\"thecode\""))
+        assertTrue(http.posts.single().second.contains(pending.verifier))
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun claudeSignInRejectsCodeFromAnotherAttempt() {
+        val http = Scripted { _, _ -> error("must not exchange") }
+        runBlocking { app.aispend.providers.ClaudeSignIn.finish(http, "code#other", "v", "expected") }
+    }
+
+    @Test
+    fun chatGptDeviceFlowPollsUntilApproved() {
+        val payload = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"https://api.openai.com/auth":{"chatgpt_account_id":"acct_9"}}""".toByteArray())
+        var polls = 0
+        val http = Scripted { url, _ ->
+            when {
+                url.endsWith("/deviceauth/usercode") -> """{"device_auth_id":"d1","user_code":"ABCD-1234","interval":"5"}"""
+                url.endsWith("/deviceauth/token") ->
+                    if (++polls < 3) throw HttpException(403, "") else """{"authorization_code":"ac","code_challenge":"cc","code_verifier":"cv"}"""
+                else -> """{"id_token":"h.$payload.s","access_token":"a1","refresh_token":"r1"}"""
+            }
+        }
+        val waits = mutableListOf<Long>()
+        val creds = runBlocking {
+            val device = app.aispend.providers.ChatGptSignIn.start(http)
+            assertEquals("ABCD-1234", device.userCode)
+            app.aispend.providers.ChatGptSignIn.await(http, device) { waits += it }
+        }
+        assertEquals(listOf(5000L, 5000L), waits)
+        assertEquals(mapOf("token" to "a1", "refresh" to "r1", "account" to "acct_9"), creds)
+        assertTrue(http.posts.last().second.contains("code_verifier=cv"))
+    }
+}

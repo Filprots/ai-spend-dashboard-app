@@ -8,8 +8,8 @@ import kotlinx.serialization.json.put
 /** ChatGPT plan limits via the endpoint Codex CLI uses. Undocumented, so it can change without notice. */
 object ChatGptSubscription : UsageProvider {
     private const val USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
-    private const val TOKEN_URL = "https://auth.openai.com/oauth/token"
-    private const val CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+    internal const val TOKEN_URL = "https://auth.openai.com/oauth/token"
+    internal const val CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 
     override suspend fun fetch(credentials: Map<String, String>, http: Http): FetchResult {
         val account = credentials["account"].orEmpty()

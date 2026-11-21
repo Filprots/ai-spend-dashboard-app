@@ -10,8 +10,8 @@ it in the background (every 15 min to 3 h) and on demand.
 
 | Provider | Credential | Shows | Source |
 | --- | --- | --- | --- |
-| Claude Pro / Max | OAuth access token (+ optional refresh token) from Claude Code | 5-hour and weekly limits, extra-usage spend | Undocumented endpoint used by Claude Code |
-| ChatGPT / Codex | Access token, account ID (+ optional refresh token) from Codex CLI | 5-hour and weekly limits, plan, credits | Undocumented endpoint used by Codex CLI |
+| Claude Pro / Max | In-app sign-in (or tokens pasted from Claude Code) | 5-hour and weekly limits, extra-usage spend | Undocumented endpoint used by Claude Code |
+| ChatGPT / Codex | In-app sign-in with a one-time code (or tokens pasted from Codex CLI) | 5-hour and weekly limits, plan, credits | Undocumented endpoint used by Codex CLI |
 | Anthropic API | Admin key | Cost today and this month (UTC) | Admin API cost report |
 | OpenAI API | Admin key | Cost today and this month (UTC) | Organization Costs API |
 | OpenRouter | API key | Spend today and this month, credit balance, key limit | `/api/v1/key`, `/api/v1/credits` |
@@ -23,9 +23,9 @@ Things to know:
 - The two subscription providers rely on endpoints that are not public APIs. They can change or
   stop working without notice, and Anthropic's terms reserve subscription OAuth tokens for its own
   apps — use them with your own account at your own discretion.
-- Subscription access tokens expire after a few hours. If you also enter the refresh token the app
-  renews them itself, but refresh tokens are single-use, so the Claude Code / Codex install you
-  copied it from gets signed out and needs a fresh login.
+- Signing in inside the app gives it its own tokens, which it renews itself; Claude Code and Codex
+  on your computers stay signed in. Pasting tokens copied from a computer also works, but if you
+  include the refresh token, renewing it here signs that computer out (refresh tokens are single-use).
 - Credentials are encrypted with an Android Keystore key, excluded from backups, and sent only to
   the provider they belong to. There is no server component.
 

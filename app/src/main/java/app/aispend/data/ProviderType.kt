@@ -18,6 +18,8 @@ enum class ProviderType(
     val official: Boolean,
     val fields: List<CredentialField>,
     val help: String,
+    /** Shown above the token fields when they are an alternative to signing in. */
+    val manualHelp: String = "",
 ) {
     CLAUDE_SUBSCRIPTION(
         "Claude Pro / Max", isSubscription = true, official = false,
@@ -25,11 +27,12 @@ enum class ProviderType(
             CredentialField("token", "OAuth access token", hint = "sk-ant-oat01-…"),
             CredentialField("refresh", "Refresh token", optional = true, hint = "sk-ant-ort01-…"),
         ),
-        help = "Shows your 5-hour session and weekly limits. On a computer where Claude Code is signed in, " +
-            "open ~/.claude/.credentials.json (macOS: Keychain item \"Claude Code-credentials\") and copy " +
-            "accessToken and refreshToken. Access tokens expire after a few hours; with a refresh token the " +
-            "app renews them itself, but that signs out the Claude Code install the token was copied from " +
-            "(just run /login there again). Uses the endpoint Claude Code itself uses — not a public API.",
+        help = "Shows your 5-hour session and weekly limits. Sign in below: the app gets its own tokens, so " +
+            "Claude Code on your computers stays signed in. Uses the endpoint Claude Code itself uses — " +
+            "not a public API.",
+        manualHelp = "Copy accessToken and refreshToken from ~/.claude/.credentials.json (macOS: Keychain item " +
+            "\"Claude Code-credentials\"). Access tokens expire after a few hours. If you add the refresh " +
+            "token the app renews them, but that signs out the Claude Code install it was copied from.",
     ),
     ANTHROPIC_API(
         "Anthropic API", isSubscription = false, official = true,
@@ -45,11 +48,11 @@ enum class ProviderType(
             CredentialField("account", "Account ID", optional = true, hint = "tokens.account_id"),
             CredentialField("refresh", "Refresh token", optional = true),
         ),
-        help = "Shows your Codex 5-hour and weekly limits. On a computer where Codex CLI is signed in, open " +
-            "~/.codex/auth.json and copy tokens.access_token, tokens.account_id and tokens.refresh_token. " +
-            "With a refresh token the app renews the access token itself, but that signs out the Codex " +
-            "install it was copied from (run codex login there again). " +
-            "Uses the endpoint Codex itself uses — not a public API.",
+        help = "Shows your Codex 5-hour and weekly limits. Sign in below: the app gets its own tokens, so " +
+            "Codex on your computers stays signed in. Uses the endpoint Codex itself uses — not a public API.",
+        manualHelp = "Copy tokens.access_token, tokens.account_id and tokens.refresh_token from ~/.codex/auth.json. " +
+            "If you add the refresh token the app renews the access token, but that signs out the Codex " +
+            "install it was copied from.",
     ),
     OPENAI_API(
         "OpenAI API", isSubscription = false, official = true,
