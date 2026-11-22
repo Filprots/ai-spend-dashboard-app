@@ -42,11 +42,13 @@ enum class ProviderType(
             CredentialField("token", "Admin API key", optional = true, hint = "sk-ant-admin01-…"),
             CredentialField("console", "Console session cookie", optional = true, hint = "sessionKey=…"),
             CredentialField("consoleUa", "", optional = true, hidden = true),
+            CredentialField("consoleOrg", "", optional = true, hidden = true),
         ),
         help = "An Admin key (Console → Settings → Admin keys) shows API cost for today and this month, in UTC. " +
-            "There is no API for the prepaid credit balance, so to see it, sign in to the Console here as " +
-            "well: the app then reads the balance the way the Console billing page does (an unofficial " +
-            "endpoint). Either one alone also works.",
+            "Individual Console accounts have no Admin keys, and a key only sees its own organization. " +
+            "Signing in to the Console here shows the prepaid balance (and this month's spend without a key), " +
+            "read the way the Console billing page does — an unofficial endpoint. Make one profile per " +
+            "organization; one Console login can serve all of them.",
     ),
     CHATGPT_SUBSCRIPTION(
         "ChatGPT / Codex", isSubscription = true, official = false,

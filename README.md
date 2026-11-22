@@ -22,6 +22,9 @@ Things to know:
 - Anthropic has no API for the prepaid credit balance. Signing in to the Console inside the app lets it
   read the balance the way the Console billing page does; the session is a full Console login, kept
   encrypted on the device and used only for read requests.
+- Admin keys exist only for Console organizations (not individual accounts) and only see their own
+  organization. For an individual account, or any other organization, make an Anthropic API profile
+  with just the Console sign-in and pick the organization; one Console login can serve every profile.
 - OpenAI has no way to read the prepaid credit balance with an Admin key, so only spend is shown.
 - The two subscription providers rely on endpoints that are not public APIs. They can change or
   stop working without notice, and Anthropic's terms reserve subscription OAuth tokens for its own

@@ -26,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import app.aispend.data.Profile
 import app.aispend.data.ProviderType
 import app.aispend.data.Store
+import app.aispend.providers.AnthropicApi
 import app.aispend.providers.ChatGptSignIn
 import app.aispend.providers.ClaudeSignIn
 import app.aispend.sync.Refresher
@@ -71,6 +73,7 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
 
     var consoleOpen by remember { mutableStateOf(false) }
+    var orgChoices by remember { mutableStateOf<List<AnthropicApi.ConsoleOrg>>(emptyList()) }
 
     fun credentials() = provider.fields.associate { it.key to values[it.key].orEmpty().trim() }.filterValues { it.isNotEmpty() }
     val complete = provider.fields.all { it.optional || values[it.key].orEmpty().isNotBlank() }
@@ -118,6 +121,29 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
             } finally {
                 busy = false
             }
+        }
+    }
+
+    /** Stores a Console login, then picks the organization (asking only when there is a real choice). */
+    fun useConsoleLogin(cookie: String, userAgent: String?) {
+        values["console"] = cookie
+        if (userAgent.isNullOrBlank()) values.remove("consoleUa") else values["consoleUa"] = userAgent
+        values.remove("consoleOrg")
+        signIn {
+            // With an admin key the key's own organization is matched automatically.
+            val orgs = if (values["token"].isNullOrBlank()) {
+                AnthropicApi.consoleOrganizations(Refresher.http, cookie, userAgent)
+            } else emptyList()
+            if (orgs.size > 1) {
+                orgChoices = orgs
+            } else {
+                orgs.singleOrNull()?.let {
+                    values["consoleOrg"] = it.id
+                    if (name.isBlank()) name = it.name
+                }
+                checkAndSave(credentials())
+            }
+            null
         }
     }
 
@@ -222,8 +248,30 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
                 }
                 ProviderType.ANTHROPIC_API -> {
                     val signedIn = values["console"].orEmpty().isNotBlank()
+                    if (orgChoices.isNotEmpty()) {
+                        Text("Which organization is this profile for?", style = MaterialTheme.typography.titleSmall)
+                        orgChoices.forEach { org ->
+                            OutlinedButton(enabled = !busy, modifier = Modifier.fillMaxWidth(), onClick = {
+                                orgChoices = emptyList()
+                                values["consoleOrg"] = org.id
+                                if (name.isBlank()) name = org.name
+                                signIn { checkAndSave(credentials()); null }
+                            }) { Text(org.name) }
+                        }
+                    }
                     Button(enabled = !busy, onClick = { failure = null; consoleOpen = true }) {
                         Text(if (signedIn) "Sign in to Console again" else "Sign in to Console for balance")
+                    }
+                    // Another profile's Console login can see every organization of that account.
+                    val donor = remember(existing) {
+                        store.profiles.value.firstOrNull { it.provider == ProviderType.ANTHROPIC_API && it.id != existing?.id }
+                            ?.let { p -> store.secrets.get(p.id).takeIf { !it["console"].isNullOrBlank() }?.let { p to it } }
+                    }
+                    if (!signedIn && donor != null) {
+                        OutlinedButton(enabled = !busy, onClick = {
+                            failure = null
+                            useConsoleLogin(donor.second.getValue("console"), donor.second["consoleUa"])
+                        }) { Text("Use the Console login from ${donor.first.name}") }
                     }
                     Text(
                         if (signedIn) "Console session saved — the balance is read with it." else
@@ -276,7 +324,7 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
                 consoleOpen = false
                 values["console"] = cookie
                 values["consoleUa"] = userAgent
-                signIn { checkAndSave(credentials()); null }
+                useConsoleLogin(cookie, userAgent)
             },
             onDismiss = { consoleOpen = false },
         )

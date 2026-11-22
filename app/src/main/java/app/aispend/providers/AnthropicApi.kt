@@ -26,20 +26,20 @@ object AnthropicApi : UsageProvider {
         val admin = mapOf("x-api-key" to key, "anthropic-version" to "2023-06-01")
 
         val spend = if (key.isNotEmpty()) parse(costPages(http, admin, period), period.todayStart) else null
-        if (session.isEmpty()) return spend!!
+        // The admin key's own organization: names the profile and picks the matching Console org.
+        val keyOrg = if (key.isNotEmpty()) runCatching { parseObject(http.get("$ADMIN/me", admin)) }.getOrNull() else null
+        if (session.isEmpty()) return spend!!.copy(plan = keyOrg?.str("name"))
 
+        // An organization chosen at sign-in wins; individual accounts have no admin key to tell us.
+        val pinned = credentials["consoleOrg"]?.takeIf { it.isNotBlank() } ?: keyOrg?.str("id")
         // A balance failure must not hide spend the admin key did fetch.
         val balance = try {
-            // Pick the Console organization the admin key belongs to, when we can tell.
-            val orgId = if (key.isNotEmpty()) {
-                runCatching { parseObject(http.get("$ADMIN/me", admin)).str("id") }.getOrNull()
-            } else null
-            consoleBalance(http, consoleHeaders(session, credentials["consoleUa"]), orgId, needSpend = spend == null)
+            consoleBalance(http, consoleHeaders(session, credentials["consoleUa"]), pinned, needSpend = spend == null)
         } catch (e: Exception) {
             if (spend == null) throw describeConsoleFailure(e)
-            return spend.copy(warning = "Balance unavailable: ${consoleProblem(e)}")
+            return spend.copy(plan = keyOrg?.str("name"), warning = "Balance unavailable: ${consoleProblem(e)}")
         }
-        return FetchResult(money = (spend?.money ?: balance.spend) + balance.money)
+        return FetchResult(plan = balance.orgName, money = (spend?.money ?: balance.spend) + balance.money)
     }
 
     private suspend fun costPages(http: Http, headers: Map<String, String>, period: UtcPeriod): List<String> {
@@ -76,7 +76,9 @@ object AnthropicApi : UsageProvider {
 
     // ---- Console session ----
 
-    internal class ConsoleResult(val money: List<Money>, val spend: List<Money>)
+    internal class ConsoleResult(val money: List<Money>, val spend: List<Money>, val orgName: String?)
+
+    data class ConsoleOrg(val id: String, val name: String)
 
     /** A pasted bare sessionKey value is accepted as well as a full Cookie header. */
     internal fun consoleHeaders(session: String, userAgent: String?): Map<String, String> = buildMap {
@@ -86,36 +88,52 @@ object AnthropicApi : UsageProvider {
         if (!userAgent.isNullOrBlank()) put("User-Agent", userAgent)
     }
 
+    /** The API organizations this Console login can see; claude.ai chat organizations are left out. */
+    suspend fun consoleOrganizations(http: Http, session: String, userAgent: String?): List<ConsoleOrg> =
+        consoleOrganizations(http, consoleHeaders(session, userAgent))
+
+    private suspend fun consoleOrganizations(http: Http, headers: Map<String, String>): List<ConsoleOrg> =
+        parseArray(http.get(CONSOLE, headers))
+            .filter { org -> org.arr("capabilities").any { (it as? kotlinx.serialization.json.JsonPrimitive)?.content == "api" } }
+            .mapNotNull { org ->
+                val id = org.str("uuid")?.takeIf { Regex("^[A-Za-z0-9-]{1,64}$").matches(it) } ?: return@mapNotNull null
+                ConsoleOrg(id, org.str("name") ?: "Organization")
+            }
+
+    /**
+     * With [pinnedOrg] only that organization is read, so a profile never silently shows another
+     * organization's balance. Without it, the first organization whose billing is readable wins.
+     */
     internal suspend fun consoleBalance(
         http: Http,
         headers: Map<String, String>,
-        preferredOrg: String?,
+        pinnedOrg: String?,
         needSpend: Boolean,
     ): ConsoleResult {
-        val orgs = parseArray(http.get(CONSOLE, headers))
-            // The list also holds claude.ai chat organizations; only API organizations have Console billing.
-            .filter { org -> org.arr("capabilities").any { (it as? kotlinx.serialization.json.JsonPrimitive)?.content == "api" } }
-            .mapNotNull { it.str("uuid") }
-            .filter { Regex("^[A-Za-z0-9-]{1,64}$").matches(it) }
-        if (orgs.isEmpty()) throw IllegalStateException("this account has no Console API organization")
-        val ordered = orgs.sortedBy { if (it == preferredOrg) 0 else 1 }
-
+        val all = consoleOrganizations(http, headers)
+        if (all.isEmpty()) throw IllegalStateException("this account has no Console API organization")
+        val candidates = if (pinnedOrg == null) all else all.filter { it.id == pinnedOrg }
+        if (candidates.isEmpty()) {
+            throw IllegalStateException("this Console login cannot see the profile's organization — sign in to the Console again")
+        }
         var denied: HttpException? = null
-        for (org in ordered) {
+        for (org in candidates) {
             val credits = try {
-                parseObject(http.get("$CONSOLE/$org/prepaid/credits", headers))
+                http.get("$CONSOLE/${org.id}/prepaid/credits", headers)
             } catch (e: HttpException) {
                 // No billing access in this organization; try the next one.
                 if (e.code == 403 && !isChallenge(e)) { denied = e; continue } else throw e
             }
-            val parsed = parseCredits(credits.toString())
+            val parsed = parseCredits(credits)
             val spend = if (needSpend) {
-                runCatching { parseSpend(http.get("$CONSOLE/$org/current_spend", headers), parsed.currency, parsed.exponent) }
+                runCatching { parseSpend(http.get("$CONSOLE/${org.id}/current_spend", headers), parsed.currency, parsed.exponent) }
                     .getOrNull()
             } else null
-            return ConsoleResult(listOf(parsed.balance), listOfNotNull(spend))
+            return ConsoleResult(listOf(parsed.balance), listOfNotNull(spend), org.name)
         }
-        throw denied ?: IllegalStateException("no billing access")
+        throw IllegalStateException(
+            if (denied != null) "your role cannot see billing in this organization" else "no billing access"
+        )
     }
 
     internal class Credits(val balance: Money, val currency: String, val exponent: Int)

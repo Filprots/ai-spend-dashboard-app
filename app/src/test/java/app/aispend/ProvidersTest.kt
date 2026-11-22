@@ -295,3 +295,54 @@ class FableAndBalanceTest {
         assertTrue(e.exceptionOrNull()!!.message!!.contains("Admin key"))
     }
 }
+
+class ConsoleOrganizationTest {
+    private val orgs = """[{"uuid":"chat-org","name":"Chat","capabilities":["chat"]},
+        {"uuid":"team","name":"IRRISketch GmbH","capabilities":["api"]},
+        {"uuid":"personal","name":"Individual Org","capabilities":["api","chat"]}]"""
+
+    private fun http(routes: (String) -> String) = object : Http {
+        override suspend fun get(url: String, headers: Map<String, String>) = routes(url)
+        override suspend fun post(url: String, body: String, contentType: String, headers: Map<String, String>) = error("no POST")
+    }
+
+    @Test
+    fun listsOnlyApiOrganizations() {
+        val list = runBlocking { AnthropicApi.consoleOrganizations(http { orgs }, "sessionKey=x", null) }
+        assertEquals(listOf("IRRISketch GmbH", "Individual Org"), list.map { it.name })
+    }
+
+    @Test
+    fun pinnedOrganizationIsReadEvenWhenAnotherComesFirst() {
+        val h = http { url ->
+            when {
+                url.endsWith("/api/organizations") -> orgs
+                url.endsWith("/personal/prepaid/credits") -> """{"amount":16257,"currency":"USD"}"""
+                url.endsWith("/personal/current_spend") -> """{"amount":1200}"""
+                else -> error("must not read $url")
+            }
+        }
+        val r = runBlocking { AnthropicApi.fetch(mapOf("console" to "x", "consoleOrg" to "personal"), h) }
+        assertEquals("Individual Org", r.plan)
+        assertEquals(listOf(12.0, 162.57), r.money.map { it.amount })
+    }
+
+    @Test
+    fun pinnedOrganizationMissingFromLoginIsAnErrorNotAnotherOrgsBalance() {
+        val h = http { url -> if (url.endsWith("/api/organizations")) orgs else error("must not read $url") }
+        val e = runCatching { runBlocking { AnthropicApi.fetch(mapOf("console" to "x", "consoleOrg" to "gone"), h) } }
+        assertTrue(e.exceptionOrNull()!!.message!!.contains("cannot see the profile's organization"))
+    }
+
+    @Test
+    fun adminKeyProfileIsNamedAfterItsOrganization() {
+        val h = http { url ->
+            when {
+                url.contains("/cost_report") -> """{"data":[],"has_more":false}"""
+                url.endsWith("/v1/organizations/me") -> """{"id":"team","name":"IRRISketch GmbH","type":"organization"}"""
+                else -> error("unexpected $url")
+            }
+        }
+        assertEquals("IRRISketch GmbH", runBlocking { AnthropicApi.fetch(mapOf("token" to "k"), h) }.plan)
+    }
+}
