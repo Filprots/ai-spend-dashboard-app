@@ -70,6 +70,8 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
 
+    var consoleOpen by remember { mutableStateOf(false) }
+
     fun credentials() = provider.fields.associate { it.key to values[it.key].orEmpty().trim() }.filterValues { it.isNotEmpty() }
     val complete = provider.fields.all { it.optional || values[it.key].orEmpty().isNotBlank() }
 
@@ -218,6 +220,18 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
                         )
                     }
                 }
+                ProviderType.ANTHROPIC_API -> {
+                    val signedIn = values["console"].orEmpty().isNotBlank()
+                    Button(enabled = !busy, onClick = { failure = null; consoleOpen = true }) {
+                        Text(if (signedIn) "Sign in to Console again" else "Sign in to Console for balance")
+                    }
+                    Text(
+                        if (signedIn) "Console session saved — the balance is read with it." else
+                            "Optional. The session can read and change your Console account, so it is kept encrypted " +
+                                "on this device and used only to read the balance.",
+                        style = MaterialTheme.typography.bodySmall, color = muted,
+                    )
+                }
                 else -> {}
             }
             if (provider.isSubscription) {
@@ -227,7 +241,7 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
                 if (manual) Text(provider.manualHelp, style = MaterialTheme.typography.bodySmall, color = muted)
             }
             if (manual) {
-                provider.fields.forEach { field ->
+                provider.fields.filterNot { it.hidden }.forEach { field ->
                     OutlinedTextField(
                         value = values[field.key].orEmpty(),
                         onValueChange = { values[field.key] = it; failure = null },
@@ -254,6 +268,18 @@ fun ProfileEditorScreen(store: Store, profileId: String?, onDone: () -> Unit) {
                 if (failure != null && complete) TextButton(enabled = !busy, onClick = { save() }) { Text("Save anyway") }
             }
         }
+    }
+
+    if (consoleOpen) {
+        ConsoleSignInDialog(
+            onSignedIn = { cookie, userAgent ->
+                consoleOpen = false
+                values["console"] = cookie
+                values["consoleUa"] = userAgent
+                signIn { checkAndSave(credentials()); null }
+            },
+            onDismiss = { consoleOpen = false },
+        )
     }
 
     if (confirmDelete && existing != null) {

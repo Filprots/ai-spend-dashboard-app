@@ -39,4 +39,6 @@ data class Snapshot(
     val meters: List<Meter> = emptyList(),
     val money: List<Money> = emptyList(),
     val error: String? = null,
+    /** Set when the fetch succeeded but part of the data was missing, e.g. the balance. */
+    val warning: String? = null,
 )

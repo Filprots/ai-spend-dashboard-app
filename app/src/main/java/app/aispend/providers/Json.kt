@@ -16,6 +16,9 @@ import java.time.ZoneOffset
 internal fun parseObject(text: String): JsonObject =
     Json.parseToJsonElement(text) as? JsonObject ?: throw IllegalStateException("Unexpected response from provider")
 
+internal fun parseArray(text: String): List<JsonElement> =
+    Json.parseToJsonElement(text) as? JsonArray ?: throw IllegalStateException("Unexpected response from provider")
+
 internal fun JsonElement?.obj(key: String): JsonObject? = (this as? JsonObject)?.get(key) as? JsonObject
 internal fun JsonElement?.arr(key: String): List<JsonElement> = ((this as? JsonObject)?.get(key) as? JsonArray).orEmpty()
 internal fun JsonElement?.str(key: String): String? =

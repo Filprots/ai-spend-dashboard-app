@@ -197,3 +197,101 @@ class SignInTest {
         assertTrue(http.posts.last().second.contains("code_verifier=cv"))
     }
 }
+
+class FableAndBalanceTest {
+    @Test
+    fun claudeScopedWeeklyLimitBecomesItsOwnMeter() {
+        val r = ClaudeSubscription.parse(
+            """{"five_hour":{"utilization":11.0,"resets_at":"2026-07-03T00:30:00.282668+00:00"},
+            "seven_day":{"utilization":9.0,"resets_at":"2026-07-08T09:00:00.282694+00:00"},
+            "seven_day_opus":null,"seven_day_sonnet":{"utilization":3,"resets_at":null},
+            "limits":[null,
+              {"kind":"session","group":"session","percent":11,"resets_at":"2026-07-03T00:30:00+00:00","scope":null},
+              {"kind":"weekly_all","group":"weekly","percent":9,"resets_at":"2026-07-08T09:00:00+00:00","scope":null},
+              {"kind":"weekly_scoped","group":"weekly","percent":"5","resets_at":"2026-07-08T09:00:00.283070+00:00",
+               "scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"is_active":false},
+              {"kind":"weekly_scoped","group":"weekly","percent":40,"resets_at":null,
+               "scope":{"model":{"id":null,"display_name":"Sonnet"}}},
+              {"kind":"weekly_scoped","group":"weekly","percent":1,"scope":{"model":{"display_name":"All models"}}}]}"""
+        )
+        // Sonnet from `limits` replaces the legacy seven_day_sonnet field rather than duplicating it.
+        assertEquals(listOf("5-hour", "Weekly", "Fable wk", "Sonnet wk"), r.meters.map { it.label })
+        assertEquals(5.0, r.meters[2].usedPercent, 0.0)
+        assertEquals(Instant.parse("2026-07-08T09:00:00.283070Z").toEpochMilli(), r.meters[2].resetsAt)
+        assertEquals(40.0, r.meters[3].usedPercent, 0.0)
+    }
+
+    private val orgs = """[{"uuid":"chat-org","capabilities":["chat"]},
+        {"uuid":"org-a","capabilities":["api"]},{"uuid":"org-b","capabilities":["chat","api"]}]"""
+    private val credits = """{"amount":123456,"currency":"USD","balance":{"credits":{"exponent":2}},"tranches":[]}"""
+    private val cost = """{"data":[],"has_more":false,"next_page":null}"""
+
+    private fun http(routes: (String, Map<String, String>) -> String) = object : Http {
+        val seen = mutableListOf<String>()
+        override suspend fun get(url: String, headers: Map<String, String>): String { seen += url; return routes(url, headers) }
+        override suspend fun post(url: String, body: String, contentType: String, headers: Map<String, String>) = error("no POST")
+    }
+
+    @Test
+    fun adminKeyPlusConsoleShowsSpendAndBalanceForTheKeysOrganization() {
+        val h = http { url, headers ->
+            when {
+                url.contains("/cost_report") -> cost
+                url.endsWith("/v1/organizations/me") -> """{"id":"org-b","type":"organization","name":"Work"}"""
+                url.endsWith("/api/organizations") -> {
+                    assertEquals("sessionKey=abc; other=1", headers["Cookie"])
+                    assertEquals("UA", headers["User-Agent"])
+                    orgs
+                }
+                url.endsWith("/org-b/prepaid/credits") -> credits
+                else -> error("unexpected $url")
+            }
+        }
+        val r = runBlocking {
+            AnthropicApi.fetch(mapOf("token" to "k", "console" to "sessionKey=abc; other=1", "consoleUa" to "UA"), h)
+        }
+        assertEquals(listOf("Today", "This month", "Balance"), r.money.map { it.label })
+        assertEquals(1234.56, r.money[2].amount, 1e-9)
+        assertNull(r.warning)
+        assertTrue(h.seen.none { it.contains("org-a") })
+    }
+
+    @Test
+    fun consoleFailureKeepsSpendAndWarns() {
+        val h = http { url, _ ->
+            when {
+                url.contains("/cost_report") -> cost
+                url.endsWith("/me") -> throw HttpException(404, "")
+                else -> throw HttpException(401, "")
+            }
+        }
+        val r = runBlocking { AnthropicApi.fetch(mapOf("token" to "k", "console" to "abc"), h) }
+        assertEquals(listOf("Today", "This month"), r.money.map { it.label })
+        assertTrue(r.warning!!.contains("sign in to the Console again"))
+    }
+
+    @Test
+    fun consoleOnlyUsesConsoleSpendAndSkipsOrgsWithoutBillingAccess() {
+        val h = http { url, headers ->
+            assertEquals("sessionKey=bare", headers["Cookie"])
+            when {
+                url.endsWith("/api/organizations") -> orgs
+                url.endsWith("/org-a/prepaid/credits") -> throw HttpException(403, "{\"error\":\"forbidden\"}")
+                url.endsWith("/org-b/prepaid/credits") -> """{"amount":500,"currency":"EUR"}"""
+                url.endsWith("/org-b/current_spend") -> """{"amount":1999}"""
+                else -> error("unexpected $url")
+            }
+        }
+        val r = runBlocking { AnthropicApi.fetch(mapOf("console" to "bare"), h) }
+        assertEquals(listOf("This month", "Balance"), r.money.map { it.label })
+        assertEquals(19.99, r.money[0].amount, 1e-9)
+        assertEquals(5.0, r.money[1].amount, 1e-9)
+        assertEquals("EUR", r.money[1].currency)
+    }
+
+    @Test
+    fun nothingConfiguredIsAClearError() {
+        val e = runCatching { runBlocking { AnthropicApi.fetch(emptyMap(), http { _, _ -> error("no calls") }) } }
+        assertTrue(e.exceptionOrNull()!!.message!!.contains("Admin key"))
+    }
+}

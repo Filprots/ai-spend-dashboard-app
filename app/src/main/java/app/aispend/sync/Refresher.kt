@@ -67,7 +67,7 @@ object Refresher {
     ): Snapshot = try {
         val result = Providers.of(profile.provider).fetch(credentials, http)
         result.updatedCredentials?.let(onRotated)
-        Snapshot(profile.id, System.currentTimeMillis(), result.plan, result.meters, result.money)
+        Snapshot(profile.id, System.currentTimeMillis(), result.plan, result.meters, result.money, warning = result.warning)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {

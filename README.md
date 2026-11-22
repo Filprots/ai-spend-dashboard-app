@@ -10,16 +10,19 @@ it in the background (every 15 min to 3 h) and on demand.
 
 | Provider | Credential | Shows | Source |
 | --- | --- | --- | --- |
-| Claude Pro / Max | In-app sign-in (or tokens pasted from Claude Code) | 5-hour and weekly limits, extra-usage spend | Undocumented endpoint used by Claude Code |
+| Claude Pro / Max | In-app sign-in (or tokens pasted from Claude Code) | 5-hour, weekly and model-only weekly limits (e.g. Fable), extra-usage spend | Undocumented endpoint used by Claude Code |
 | ChatGPT / Codex | In-app sign-in with a one-time code (or tokens pasted from Codex CLI) | 5-hour and weekly limits, plan, credits | Undocumented endpoint used by Codex CLI |
-| Anthropic API | Admin key | Cost today and this month (UTC) | Admin API cost report |
+| Anthropic API | Admin key and/or in-app Console sign-in | Cost today and this month (UTC), prepaid credit balance | Admin API cost report; Console billing endpoints (unofficial) for the balance |
 | OpenAI API | Admin key | Cost today and this month (UTC) | Organization Costs API |
 | OpenRouter | API key | Spend today and this month, credit balance, key limit | `/api/v1/key`, `/api/v1/credits` |
 | DeepSeek | API key | Balance | `/user/balance` |
 
 Things to know:
 
-- Anthropic and OpenAI do not expose the prepaid credit balance through any API, so only spend is shown.
+- Anthropic has no API for the prepaid credit balance. Signing in to the Console inside the app lets it
+  read the balance the way the Console billing page does; the session is a full Console login, kept
+  encrypted on the device and used only for read requests.
+- OpenAI has no way to read the prepaid credit balance with an Admin key, so only spend is shown.
 - The two subscription providers rely on endpoints that are not public APIs. They can change or
   stop working without notice, and Anthropic's terms reserve subscription OAuth tokens for its own
   apps — use them with your own account at your own discretion.

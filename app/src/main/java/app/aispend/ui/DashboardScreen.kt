@@ -167,6 +167,7 @@ private fun ProfileCard(profile: Profile, snapshot: Snapshot?) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
+                snapshot?.warning != null -> Text(snapshot.warning, style = MaterialTheme.typography.bodySmall, color = Warn)
                 snapshot == null -> Text("Waiting for first refresh", style = MaterialTheme.typography.bodySmall, color = muted)
                 snapshot.meters.isEmpty() && snapshot.money.isEmpty() ->
                     Text("The provider reported no usage data for this account", style = MaterialTheme.typography.bodySmall, color = muted)

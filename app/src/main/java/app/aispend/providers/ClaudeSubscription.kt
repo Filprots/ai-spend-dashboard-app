@@ -45,17 +45,24 @@ object ClaudeSubscription : UsageProvider {
 
     internal fun parse(body: String): FetchResult {
         val root = parseObject(body)
-        val windows = listOf(
-            "five_hour" to "5-hour",
-            "seven_day" to "Weekly",
-            "seven_day_opus" to "Opus wk",
-            "seven_day_sonnet" to "Sonnet wk",
-        )
-        val meters = windows.mapNotNull { (key, label) ->
-            val window = root.obj(key) ?: return@mapNotNull null
-            val used = window.num("utilization") ?: return@mapNotNull null
-            Meter(label, used, isoToMillis(window.str("resets_at")))
+        fun window(key: String, label: String): Meter? {
+            val window = root.obj(key) ?: return null
+            val used = window.num("utilization") ?: return null
+            return Meter(label, used, isoToMillis(window.str("resets_at")))
         }
+        // Model-only weekly limits (e.g. "Fable") arrive in the newer `limits` list. The model changes
+        // over time, so the label comes from the response rather than a hard-coded name.
+        val scoped = root.arr("limits").mapNotNull { limit ->
+            if (limit.str("kind") != "weekly_scoped") return@mapNotNull null
+            val model = limit.obj("scope").obj("model").str("display_name")?.trim()
+            if (model.isNullOrEmpty() || model.equals("all models", ignoreCase = true)) return@mapNotNull null
+            val used = limit.num("percent") ?: return@mapNotNull null
+            Meter("$model wk", used, isoToMillis(limit.str("resets_at")))
+        }.distinctBy { it.label }
+        // The older per-model fields, unless the same model is already covered by `limits`.
+        val legacy = listOfNotNull(window("seven_day_opus", "Opus wk"), window("seven_day_sonnet", "Sonnet wk"))
+            .filter { old -> scoped.none { it.label.equals(old.label, ignoreCase = true) } }
+        val meters = listOfNotNull(window("five_hour", "5-hour"), window("seven_day", "Weekly")) + scoped + legacy
         val extra = root.obj("extra_usage")
         val money = if (extra.bool("is_enabled") == true) {
             // Reported in cents.

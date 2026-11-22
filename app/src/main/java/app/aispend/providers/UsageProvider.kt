@@ -10,6 +10,8 @@ data class FetchResult(
     val money: List<Money> = emptyList(),
     /** Set when the provider rotated tokens during the fetch; the caller must persist them. */
     val updatedCredentials: Map<String, String>? = null,
+    /** Fresh numbers were fetched, but part of the data could not be; shown beside them. */
+    val warning: String? = null,
 )
 
 interface UsageProvider {

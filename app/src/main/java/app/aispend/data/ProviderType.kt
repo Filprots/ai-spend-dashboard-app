@@ -8,6 +8,8 @@ data class CredentialField(
     val label: String,
     val optional: Boolean = false,
     val hint: String = "",
+    /** Filled in by a sign-in flow rather than typed; kept with the credentials but not shown. */
+    val hidden: Boolean = false,
 )
 
 @Serializable
@@ -36,10 +38,15 @@ enum class ProviderType(
     ),
     ANTHROPIC_API(
         "Anthropic API", isSubscription = false, official = true,
-        fields = listOf(CredentialField("token", "Admin API key", hint = "sk-ant-admin01-…")),
-        help = "Shows API cost for today and this month. Needs an Admin key (Console → Settings → Admin keys); " +
-            "regular API keys cannot read costs, and Admin keys exist only for organization accounts. Days are " +
-            "counted in UTC. Anthropic does not expose the prepaid credit balance.",
+        fields = listOf(
+            CredentialField("token", "Admin API key", optional = true, hint = "sk-ant-admin01-…"),
+            CredentialField("console", "Console session cookie", optional = true, hint = "sessionKey=…"),
+            CredentialField("consoleUa", "", optional = true, hidden = true),
+        ),
+        help = "An Admin key (Console → Settings → Admin keys) shows API cost for today and this month, in UTC. " +
+            "There is no API for the prepaid credit balance, so to see it, sign in to the Console here as " +
+            "well: the app then reads the balance the way the Console billing page does (an unofficial " +
+            "endpoint). Either one alone also works.",
     ),
     CHATGPT_SUBSCRIPTION(
         "ChatGPT / Codex", isSubscription = true, official = false,

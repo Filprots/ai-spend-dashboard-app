@@ -141,7 +141,7 @@ private fun ProfileRow(profile: Profile, snapshot: Snapshot?) {
                 Text("  !", style = TextStyle(color = danger, fontSize = 13.sp, fontWeight = FontWeight.Bold))
             }
         }
-        snapshot?.meters?.take(2)?.forEach { MeterRow(it) }
+        snapshot?.meters?.take(3)?.forEach { MeterRow(it) }
         if (snapshot == null || (snapshot.fetchedAt == 0L && snapshot.error == null)) {
             Text("Waiting for first refresh", style = TextStyle(color = muted, fontSize = 11.sp))
         } else if (snapshot.fetchedAt == 0L) {
